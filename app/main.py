@@ -17,10 +17,19 @@ import sqlite3
 from datetime import datetime
 
 # Add src directory to path for imports
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))
+src_path = os.path.join(os.path.dirname(__file__), '..', 'src')
+sys.path.insert(0, src_path)
+sys.path.insert(0, os.path.dirname(__file__ + '/..'))
+
+# Also add the src path to handle model loading imports
+import importlib.util
+if 'src' not in sys.modules:
+    sys.modules['src'] = type(sys)('src')
+    sys.modules['src'].__path__ = [src_path]
 
 from preprocess import HeartDiseasePreprocessor
 from recommendations import HealthcareRecommendationSystem, generate_patient_report
+from auth import check_authentication, show_authentication_page, logout_user, get_current_user
 
 def create_model_input(patient_data):
     """Convert raw patient data to model input format."""
@@ -101,17 +110,61 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+def simple_preprocess_data(data):
+    """Simple preprocessing function that mimics the original preprocessor without requiring the pickled class."""
+    import pandas as pd
+    
+    # If it's not already a DataFrame, convert it
+    if not isinstance(data, pd.DataFrame):
+        data = pd.DataFrame([data])
+    
+    # Create a copy to avoid modifying original
+    processed_data = data.copy()
+    
+    # Handle the expected feature columns based on the model input format
+    expected_features = [
+        'Age', 'Sex', 'FastingBS', 'MaxHR', 'ExerciseAngina', 'Oldpeak',
+        'ChestPainType_ATA', 'ChestPainType_NAP', 'ST_Slope_Flat', 'ST_Slope_Up'
+    ]
+    
+    # Ensure all expected features exist
+    for feature in expected_features:
+        if feature not in processed_data.columns:
+            processed_data[feature] = 0.0
+    
+    # Return only the expected features in the right order
+    return processed_data[expected_features]
+
 @st.cache_resource
 def load_model_and_preprocessor():
     """Load trained model and preprocessor."""
     try:
-        model_path = os.path.join(os.path.dirname(__file__), '..', 'models', 'best_heart_model.pkl')
-        preprocessor_path = os.path.join(os.path.dirname(__file__), '..', 'models', 'preprocessor.pkl')
+        # Ensure proper module structure for unpickling
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        parent_dir = os.path.dirname(current_dir)
+        src_dir = os.path.join(parent_dir, 'src')
+        if src_dir not in sys.path:
+            sys.path.insert(0, src_dir)
         
-        if os.path.exists(model_path) and os.path.exists(preprocessor_path):
+        # Try the models directory first
+        model_path = os.path.join(parent_dir, 'models', 'best_heart_model.pkl')
+        
+        # If not found, try data directory
+        if not os.path.exists(model_path):
+            model_path = os.path.join(parent_dir, 'data', 'best_model.pkl')
+        
+        if os.path.exists(model_path):
             model = joblib.load(model_path)
-            preprocessor = joblib.load(preprocessor_path)
-            return model, preprocessor
+            
+            # Handle case where model is stored as dictionary
+            if isinstance(model, dict):
+                if 'model' in model:
+                    model = model['model']
+                elif 'best_model' in model:
+                    model = model['best_model']
+            
+            # Return model with simple preprocessing function instead of pickled preprocessor
+            return model, simple_preprocess_data
         else:
             st.error("Model files not found. Please train the model first.")
             return None, None
@@ -666,14 +719,116 @@ def create_dashboard():
         )
         st.plotly_chart(fig_corr, use_container_width=True)
 
+def create_user_profile_interface():
+    """Create user profile management interface."""
+    st.header("👤 User Profile")
+    
+    current_user = get_current_user()
+    if not current_user:
+        st.error("User information not available.")
+        return
+    
+    # Display user information
+    col1, col2 = st.columns([1, 2])
+    
+    with col1:
+        # User avatar placeholder
+        st.markdown("""
+        <div style='text-align: center; background: linear-gradient(45deg, #667eea, #764ba2); 
+                    color: white; padding: 40px; border-radius: 50%; width: 150px; height: 150px; 
+                    margin: 0 auto; display: flex; align-items: center; justify-content: center; 
+                    font-size: 3rem; font-weight: bold;'>
+            {}
+        </div>
+        """.format(current_user['full_name'][0].upper()), unsafe_allow_html=True)
+    
+    with col2:
+        st.markdown("### Account Information")
+        st.write(f"**Full Name:** {current_user['full_name']}")
+        st.write(f"**Username:** {current_user['username']}")
+        st.write(f"**Email:** {current_user['email']}")
+        st.write(f"**Role:** {current_user['role'].title()}")
+        st.write(f"**User ID:** {current_user['id']}")
+    
+    st.markdown("---")
+    
+    # Usage statistics (placeholder)
+    st.subheader("📊 Usage Statistics")
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.metric("Predictions Made", "0", help="Total number of predictions made")
+    with col2:
+        st.metric("Session Duration", "Active", help="Current session status")
+    with col3:
+        st.metric("Account Type", current_user['role'].title(), help="Your account role")
+    with col4:
+        st.metric("Member Since", "Today", help="Account registration date")
+    
+    st.markdown("---")
+    
+    # Account management section
+    st.subheader("🔧 Account Management")
+    
+    # Change password section
+    with st.expander("🔒 Change Password"):
+        st.markdown("**Change your account password**")
+        with st.form("change_password_form"):
+            current_password = st.text_input("Current Password", type="password")
+            new_password = st.text_input("New Password", type="password")
+            confirm_password = st.text_input("Confirm New Password", type="password")
+            
+            if st.form_submit_button("Update Password"):
+                if not all([current_password, new_password, confirm_password]):
+                    st.error("All fields are required.")
+                elif new_password != confirm_password:
+                    st.error("New passwords do not match.")
+                else:
+                    # Here you would implement password change logic
+                    st.info("Password change functionality will be implemented in the next version.")
+    
+    # Session management
+    with st.expander("🔄 Session Management"):
+        st.markdown("**Active Sessions**")
+        st.write("Current session is active and valid.")
+        if st.button("🚪 Logout All Sessions"):
+            logout_user()
+    
+    # Danger zone
+    with st.expander("⚠️ Danger Zone", expanded=False):
+        st.markdown("**Dangerous Actions**")
+        st.warning("These actions cannot be undone.")
+        if st.button("❌ Delete Account", help="This will permanently delete your account"):
+            st.error("Account deletion functionality will be implemented in the next version.")
+
 def main():
     """Main application function."""
     
-    # Sidebar navigation
+    # Check authentication first
+    if not check_authentication():
+        show_authentication_page()
+        return
+    
+    # Get current user info
+    current_user = get_current_user()
+    
+    # Sidebar with user info and navigation
+    st.sidebar.markdown(f"""
+    <div style='background-color: #f0f2f6; padding: 10px; border-radius: 10px; margin-bottom: 20px;'>
+        <h4>👋 Welcome, {current_user['full_name']}!</h4>
+        <p style='margin: 0; color: #666; font-size: 0.8rem;'>@{current_user['username']}</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Logout button
+    if st.sidebar.button("🚪 Logout", help="Sign out from the system"):
+        logout_user()
+        return
+    
     st.sidebar.title("Navigation")
     page = st.sidebar.radio(
         "Choose a page:",
-        ["🔍 Single Prediction", "📊 Batch Analysis", "📈 Dashboard"]
+        ["🔍 Single Prediction", "📊 Batch Analysis", "📈 Dashboard", "👤 User Profile"]
     )
     
     # Route to appropriate page
@@ -683,12 +838,15 @@ def main():
         create_batch_prediction_interface()
     elif page == "📈 Dashboard":
         create_dashboard()
+    elif page == "👤 User Profile":
+        create_user_profile_interface()
     
     # Footer
     st.markdown("---")
-    st.markdown("""
+    st.markdown(f"""
     <div style='text-align: center; color: #666; font-size: 0.8rem;'>
         ❤️ Heart Failure Prediction System | Built with Streamlit<br>
+        <strong>Logged in as:</strong> {current_user['full_name']} ({current_user['role'].title()})<br>
         <strong>Disclaimer:</strong> This tool is for educational purposes only. 
         Always consult healthcare professionals for medical decisions.
     </div>

@@ -11,6 +11,13 @@ A state-of-the-art machine learning system for predicting heart failure risk wit
 
 ## 🌟 Features
 
+### 🔐 User Authentication System
+- **Secure Login/Registration**: User account creation with strong password requirements
+- **Session Management**: Secure session tokens with automatic expiration
+- **User Profiles**: Personalized user dashboards and account management
+- **Password Security**: SHA-256 hashing with salt for password protection
+- **Role-Based Access**: Support for different user roles and permissions
+
 ### 🤖 Advanced Machine Learning Pipeline
 - **Multiple Algorithms**: Random Forest, XGBoost, CatBoost, Gradient Boosting, SVM, Naive Bayes, Decision Tree
 - **Automated Hyperparameter Tuning**: Grid search optimization for best performance
@@ -78,15 +85,26 @@ source heart_failure_env/bin/activate  # On Windows: heart_failure_env\Scripts\a
 pip install -r requirements.txt
 ```
 
-4. **Run the application**
+4. **Set up demo users (optional)**
+```bash
+python setup_demo_users.py
+```
+
+5. **Run the application**
 ```bash
 streamlit run app/main.py
 ```
 
-5. **Open your browser**
+6. **Open your browser**
 Navigate to `http://localhost:8501` to access the web interface.
 
-## 📁 Project Structure
+### � Demo Login Credentials
+After running the demo setup script, you can use these credentials:
+- **Admin**: `admin` / `Admin123!`
+- **Doctor**: `doctor_smith` / `Doctor123!`  
+- **Demo User**: `demo_user` / `Demo123!`
+
+## �📁 Project Structure
 
 ```
 heart-failure-prediction/
@@ -94,6 +112,7 @@ heart-failure-prediction/
 │   ├── main.py             # Main application interface
 │   └── utils.py            # Application utilities
 ├── src/                     # Core source code
+│   ├── auth.py             # User authentication system
 │   ├── preprocess.py       # Data preprocessing pipeline
 │   ├── train.py            # Model training and evaluation
 │   ├── database.py         # Hospital database management
