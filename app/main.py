@@ -499,13 +499,38 @@ def create_batch_prediction_interface():
     
     if st.button("Run Batch Predictions"):
         try:
+            # Get the actual estimator from the model dictionary
+            estimator = model['model'] if isinstance(model, dict) else model
+            
             # Prepare features (remove target if present)
             feature_cols = [col for col in df.columns if col != 'HeartDisease']
-            X = df[feature_cols]
+            X = df[feature_cols].copy()
+            
+            # Convert categorical data to the format expected by the model
+            processed_rows = []
+            for idx, row in X.iterrows():
+                # Convert each row to the format expected by create_model_input
+                patient_data = {
+                    'Age': row['Age'],
+                    'Sex': 1 if row['Sex'] == 'M' else 0,  # M=1, F=0
+                    'ChestPainType': {'ATA': 0, 'NAP': 1, 'TA': 2, 'ASY': 3}.get(row['ChestPainType'], 3),
+                    'FastingBS': row['FastingBS'],
+                    'MaxHR': row['MaxHR'],
+                    'ExerciseAngina': 1 if row['ExerciseAngina'] == 'Y' else 0,  # Y=1, N=0
+                    'Oldpeak': row['Oldpeak'],
+                    'ST_Slope': {'Up': 0, 'Flat': 1, 'Down': 2}.get(row['ST_Slope'], 2)
+                }
+                
+                # Use create_model_input to get the proper format
+                model_input = create_model_input(patient_data)
+                processed_rows.append(model_input.iloc[0])
+            
+            # Create DataFrame from processed rows
+            X_processed = pd.DataFrame(processed_rows)
             
             # Make predictions
-            predictions = model.predict(X)
-            prediction_probas = model.predict_proba(X)[:, 1]
+            predictions = estimator.predict(X_processed)
+            prediction_probas = estimator.predict_proba(X_processed)[:, 1]
             
             # Add predictions to dataframe
             results_df = df.copy()
