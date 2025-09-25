@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: heart-failure-prediction
+  labels:
+    app: heart-failure-prediction
+    environment: production

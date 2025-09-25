@@ -1,0 +1,199 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: heart-failure-prediction
+  namespace: heart-failure-prediction
+  labels:
+    app: heart-failure-prediction
+    version: v1
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: heart-failure-prediction
+  template:
+    metadata:
+      labels:
+        app: heart-failure-prediction
+        version: v1
+    spec:
+      serviceAccountName: heart-failure-prediction
+      securityContext:
+        fsGroup: 1001
+      containers:
+      - name: heart-failure-prediction
+        image: heart-failure-prediction:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 8501
+          protocol: TCP
+        - name: metrics
+          containerPort: 9090
+          protocol: TCP
+        
+        # Environment variables from ConfigMap
+        envFrom:
+        - configMapRef:
+            name: heart-failure-prediction-config
+        
+        # Environment variables from Secrets
+        env:
+        - name: DATABASE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: heart-failure-prediction-secrets
+              key: database-password
+        - name: DATABASE_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: heart-failure-prediction-secrets
+              key: database-username
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: heart-failure-prediction-secrets
+              key: redis-password
+        - name: API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: heart-failure-prediction-secrets
+              key: api-key
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: heart-failure-prediction-secrets
+              key: jwt-secret
+        
+        # Resource limits and requests
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+        
+        # Health checks
+        livenessProbe:
+          httpGet:
+            path: /_stcore/health
+            port: 8501
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 3
+        
+        readinessProbe:
+          httpGet:
+            path: /_stcore/health
+            port: 8501
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          successThreshold: 1
+          failureThreshold: 3
+        
+        # Volume mounts
+        volumeMounts:
+        - name: models-storage
+          mountPath: /app/models
+        - name: logs-storage
+          mountPath: /app/logs
+        - name: data-storage
+          mountPath: /app/data
+        - name: tmp-storage
+          mountPath: /tmp
+        
+        # Security context
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          runAsUser: 1001
+          runAsGroup: 1001
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: false
+      
+      # Image pull secrets for private registries
+      imagePullSecrets:
+      - name: registry-secret
+      
+      # Volumes
+      volumes:
+      - name: models-storage
+        persistentVolumeClaim:
+          claimName: models-pvc
+      - name: logs-storage
+        persistentVolumeClaim:
+          claimName: logs-pvc
+      - name: data-storage
+        persistentVolumeClaim:
+          claimName: data-pvc
+      - name: tmp-storage
+        emptyDir: {}
+      
+      # Pod scheduling
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - heart-failure-prediction
+              topologyKey: kubernetes.io/hostname
+      
+      # Node selection
+      nodeSelector:
+        kubernetes.io/os: linux
+      
+      # Tolerations for dedicated nodes
+      tolerations:
+      - key: "app"
+        operator: "Equal"
+        value: "heart-failure-prediction"
+        effect: "NoSchedule"
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: heart-failure-prediction
+  namespace: heart-failure-prediction
+  labels:
+    app: heart-failure-prediction
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: heart-failure-prediction
+  name: heart-failure-prediction
+rules:
+- apiGroups: [""]
+  resources: ["pods", "configmaps", "secrets"]
+  verbs: ["get", "list"]
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["create"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: heart-failure-prediction
+  namespace: heart-failure-prediction
+subjects:
+- kind: ServiceAccount
+  name: heart-failure-prediction
+  namespace: heart-failure-prediction
+roleRef:
+  kind: Role
+  name: heart-failure-prediction
+  apiGroup: rbac.authorization.k8s.io

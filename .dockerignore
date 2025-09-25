@@ -1,0 +1,112 @@
+# Docker ignore file
+# Ignore these files and directories when building Docker image
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+env/
+ENV/
+heart_failure_env/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+docs/
+*.md
+LICENSE
+
+# Test files
+tests/
+pytest.ini
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Logs
+logs/
+*.log
+
+# Temporary files
+tmp/
+temp/
+.tmp/
+
+# Docker files themselves
+Dockerfile
+Dockerfile.*
+docker-compose*.yml
+.dockerignore
+
+# Development files
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+
+# Database files (will be mounted as volumes)
+*.db
+*.sqlite
+*.sqlite3
+
+# Model files (will be mounted as volumes or downloaded)
+models/*.pkl
+models/*.joblib
+models/*.onnx
+
+# Large data files (should be mounted or downloaded separately)
+data/*.csv
+data/*.json
+data/raw/
+data/processed/
+
+# Jupyter notebooks
+*.ipynb
+.ipynb_checkpoints/
+
+# Monitoring and config
+monitoring/
+nginx/
+ssl/
+secrets/
