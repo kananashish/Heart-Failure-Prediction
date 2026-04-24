@@ -1,0 +1,64 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv
+heart_failure_env/
+heart_failure_env_new/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Data and models (keep commented if you want to track them)
+# data/*.csv
+# models/*.pkl
+
+# Streamlit
+.streamlit/secrets.toml
+.streamlit/cache/
+
+# Testing
+.pytest_cache/
+htmlcov/
+.coverage
+.hypothesis/
+
+# CatBoost
+catboost_info/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Environment
+.env
+.env.local
