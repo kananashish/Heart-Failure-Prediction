@@ -39,9 +39,14 @@ heart_failure_env_new/
 .DS_Store
 Thumbs.db
 
-# Data and models (keep commented if you want to track them)
-# data/*.csv
-# models/*.pkl
+# Data files - stored in separate heart-data repository
+data/*.csv
+data/*.db
+data/
+
+# Models are kept (only production models)
+!models/best_heart_model.pkl
+!models/preprocessor.pkl
 
 # Streamlit
 .streamlit/secrets.toml

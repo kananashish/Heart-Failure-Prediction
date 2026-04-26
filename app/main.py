@@ -174,29 +174,39 @@ def load_model_and_preprocessor():
 
 @st.cache_data
 def load_sample_data():
-    """Load sample data for demonstration."""
+    """Load sample data from GitHub repository."""
     try:
-        data_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'heart.csv')
-        if os.path.exists(data_path):
-            df = pd.read_csv(data_path)
-            return df.head(1000)  # Limit for demo
-        else:
-            # Create sample data if file doesn't exist
-            sample_data = {
-                'Age': [54, 37, 41, 56, 57],
-                'Sex': [1, 1, 0, 1, 0],
-                'ChestPainType': [2, 1, 1, 0, 0],
-                'RestingBP': [150, 130, 140, 120, 120],
-                'Cholesterol': [195, 250, 204, 236, 354],
-                'FastingBS': [0, 0, 0, 0, 0],
-                'RestingECG': [1, 1, 0, 1, 1],
-                'MaxHR': [122, 187, 172, 178, 163],
-                'ExerciseAngina': [0, 0, 0, 0, 1],
-                'Oldpeak': [0, 3.5, 1.4, 0.8, 0.6],
-                'ST_Slope': [2, 0, 2, 2, 2],
-                'HeartDisease': [0, 0, 0, 0, 0]
-            }
-            return pd.DataFrame(sample_data)
+        # Try to load from GitHub first
+        from app.config import DATA_URLS
+        url = DATA_URLS['demo_data']
+        df = pd.read_csv(url)
+        return df.head(1000)
+    except Exception as e:
+        # Fallback: Try local file
+        try:
+            data_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'train_balanced.csv')
+            if os.path.exists(data_path):
+                df = pd.read_csv(data_path)
+                return df.head(1000)
+        except:
+            pass
+        
+        # Final fallback: Use hardcoded sample data
+        sample_data = {
+            'Age': [54, 37, 41, 56, 57],
+            'Sex': [1, 1, 0, 1, 0],
+            'ChestPainType': [2, 1, 1, 0, 0],
+            'RestingBP': [150, 130, 140, 120, 120],
+            'Cholesterol': [195, 250, 204, 236, 354],
+            'FastingBS': [0, 0, 0, 0, 0],
+            'RestingECG': [1, 1, 0, 1, 1],
+            'MaxHR': [122, 187, 172, 178, 163],
+            'ExerciseAngina': [0, 0, 0, 0, 1],
+            'Oldpeak': [0, 3.5, 1.4, 0.8, 0.6],
+            'ST_Slope': [2, 0, 2, 2, 2],
+            'HeartDisease': [0, 0, 0, 0, 0]
+        }
+        return pd.DataFrame(sample_data)
     except Exception as e:
         st.error(f"Error loading data: {e}")
         return None

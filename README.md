@@ -48,6 +48,20 @@ A state-of-the-art machine learning system for predicting heart failure risk wit
 ### 🌐 Interactive Web Application
 - **Real-time Predictions**: Instant heart failure risk assessment
 - **Batch Processing**: Upload CSV files for multiple patient predictions
+
+## 📊 Data Source
+
+This application uses datasets stored in a separate GitHub repository for optimal deployment size.
+
+### External Data Repository
+- **Repository**: [kananashish/heart-data](https://github.com/kananashish/heart-data)
+- **Datasets**: `train_balanced.csv`, `test.csv`, `model_results.csv`, and more...
+
+### How Data Loading Works
+- **Production**: Fetches data from GitHub raw content URLs
+- **Development**: Tries GitHub first, then local files if offline
+- **Fallback**: Uses hardcoded sample data if GitHub unavailable
+- **Caching**: Data cached in memory for performance (`@st.cache_data`)
 - **Visualization Dashboard**: Interactive charts and model explanations
 - **User-Friendly Interface**: Intuitive design with medical terminology explanations
 - **Export Functionality**: Download results and reports
