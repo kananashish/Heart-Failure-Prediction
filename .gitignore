@@ -44,7 +44,9 @@ data/*.csv
 data/*.db
 data/
 
-# Models are kept (only production models)
+# Model files (large binary files - only production models tracked)
+*.pkl
+*.joblib
 !models/best_heart_model.pkl
 !models/preprocessor.pkl
 
