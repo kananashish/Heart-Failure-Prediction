@@ -27,9 +27,28 @@ if 'src' not in sys.modules:
     sys.modules['src'] = type(sys)('src')
     sys.modules['src'].__path__ = [src_path]
 
-from preprocess import HeartDiseasePreprocessor
-from recommendations import HealthcareRecommendationSystem, generate_patient_report
-from auth import check_authentication, show_authentication_page, logout_user, get_current_user
+# Import custom modules with graceful error handling
+try:
+    from preprocess import HeartDiseasePreprocessor
+except ImportError:
+    st.warning("Preprocessor module not available - using simplified preprocessing")
+    HeartDiseasePreprocessor = None
+
+try:
+    from recommendations import HealthcareRecommendationSystem, generate_patient_report
+except ImportError:
+    st.warning("Recommendations module not available")
+    HealthcareRecommendationSystem = None
+    generate_patient_report = None
+
+try:
+    from auth import check_authentication, show_authentication_page, logout_user, get_current_user
+except ImportError:
+    st.warning("Authentication module not available")
+    check_authentication = None
+    show_authentication_page = None
+    logout_user = None
+    get_current_user = None
 
 def create_model_input(patient_data):
     """Convert raw patient data to model input format."""
@@ -304,9 +323,17 @@ def display_prediction_results(patient_data: Dict, prediction: int, prediction_p
                              city: str = None, state: str = None):
     """Display prediction results and recommendations."""
     
-    # Initialize recommendation system
-    rec_system = HealthcareRecommendationSystem()
-    risk_level = rec_system.assess_risk_level(prediction_proba)
+    # Initialize recommendation system if available
+    rec_system = None
+    if HealthcareRecommendationSystem is not None:
+        try:
+            rec_system = HealthcareRecommendationSystem()
+            risk_level = rec_system.assess_risk_level(prediction_proba)
+        except:
+            rec_system = None
+            risk_level = "high" if prediction_proba > 0.7 else "moderate" if prediction_proba > 0.3 else "low"
+    else:
+        risk_level = "high" if prediction_proba > 0.7 else "moderate" if prediction_proba > 0.3 else "low"
     
     # Create columns for layout
     col1, col2, col3 = st.columns([1, 2, 1])
@@ -337,13 +364,25 @@ def display_prediction_results(patient_data: Dict, prediction: int, prediction_p
         display_analysis_tab(patient_data, prediction_proba, risk_level)
     
     with tab2:
-        display_recommendations_tab(patient_data, prediction_proba)
+        if rec_system:
+            display_recommendations_tab(patient_data, prediction_proba, rec_system)
+        else:
+            st.info("Recommendation system not available. Please ensure all modules are properly configured.")
     
     with tab3:
-        display_healthcare_tab(city, state, risk_level)
+        if rec_system:
+            display_healthcare_tab(city, state, risk_level, rec_system)
+        else:
+            st.info("Healthcare provider information not available.")
     
     with tab4:
-        display_report_tab(patient_data, prediction_proba, city, state)
+        if generate_patient_report:
+            try:
+                display_report_tab(patient_data, prediction_proba, city, state)
+            except:
+                st.info("Report generation not available.")
+        else:
+            st.info("Report generation module not available.")
 
 def display_analysis_tab(patient_data: Dict, prediction_proba: float, risk_level: str):
     """Display analysis and visualizations."""
@@ -427,104 +466,134 @@ def display_analysis_tab(patient_data: Dict, prediction_proba: float, risk_level
         else:
             st.success("No major risk factors detected!")
 
-def display_recommendations_tab(patient_data: Dict, prediction_proba: float):
+def display_recommendations_tab(patient_data: Dict, prediction_proba: float, rec_system=None):
     """Display lifestyle recommendations."""
     st.subheader("💡 Personalized Recommendations")
     
+    if rec_system is None:
+        st.info("Recommendation system not available.")
+        return
+    
     # Get recommendations
-    rec_system = HealthcareRecommendationSystem()
-    recommendations = rec_system.get_lifestyle_recommendations(patient_data, prediction_proba)
+    try:
+        recommendations = rec_system.get_lifestyle_recommendations(patient_data, prediction_proba)
+    except:
+        st.warning("Could not generate recommendations at this time.")
+        return
     
     # Display recommendations in expandable sections
-    with st.expander("🍎 Dietary Recommendations", expanded=True):
-        for rec in recommendations['diet']:
-            st.markdown(f"• {rec}")
+    if recommendations.get('diet'):
+        with st.expander("🍎 Dietary Recommendations", expanded=True):
+            for rec in recommendations['diet']:
+                st.markdown(f"• {rec}")
     
-    with st.expander("🏃 Exercise Guidelines", expanded=True):
-        for rec in recommendations['exercise']:
-            st.markdown(f"• {rec}")
+    if recommendations.get('exercise'):
+        with st.expander("🏃 Exercise Guidelines", expanded=True):
+            for rec in recommendations['exercise']:
+                st.markdown(f"• {rec}")
     
-    with st.expander("🌱 Lifestyle Changes", expanded=True):
-        for rec in recommendations['lifestyle']:
-            st.markdown(f"• {rec}")
+    if recommendations.get('lifestyle'):
+        with st.expander("🌱 Lifestyle Changes", expanded=True):
+            for rec in recommendations['lifestyle']:
+                st.markdown(f"• {rec}")
     
-    with st.expander("📱 Monitoring Requirements", expanded=True):
-        for rec in recommendations['monitoring']:
-            st.markdown(f"• {rec}")
+    if recommendations.get('monitoring'):
+        with st.expander("📱 Monitoring Requirements", expanded=True):
+            for rec in recommendations['monitoring']:
+                st.markdown(f"• {rec}")
     
-    with st.expander("🚨 Emergency Warning Signs", expanded=False):
-        st.error("Call 911 immediately if you experience:")
-        for sign in recommendations['emergency_signs']:
-            st.markdown(f"• {sign}")
+    if recommendations.get('emergency_signs'):
+        with st.expander("🚨 Emergency Warning Signs", expanded=False):
+            st.error("Call 911 immediately if you experience:")
+            for sign in recommendations['emergency_signs']:
+                st.markdown(f"• {sign}")
 
-def display_healthcare_tab(city: str, state: str, risk_level: str):
+def display_healthcare_tab(city: str, state: str, risk_level: str, rec_system=None):
     """Display healthcare provider recommendations."""
     st.subheader("🏥 Healthcare Providers")
     
-    # Get hospital recommendations
-    rec_system = HealthcareRecommendationSystem()
+    if rec_system is None:
+        st.info("Healthcare provider information not available. Please ensure the recommendations module is properly configured.")
+        return
     
-    # Find hospitals
-    emergency = (risk_level == 'high')
-    hospitals = rec_system.find_hospitals(city, state, emergency=emergency, max_results=10)
-    
-    if hospitals and 'error' not in hospitals[0]:
-        st.success(f"Found {len(hospitals)} recommended healthcare facilities")
+    try:
+        # Find hospitals
+        emergency = (risk_level == 'high')
+        hospitals = rec_system.find_hospitals(city, state, emergency=emergency, max_results=10)
         
-        for i, hospital in enumerate(hospitals[:5], 1):
-            with st.expander(f"{i}. {hospital['name']} ⭐ {hospital['cardiac_rating']}/5.0"):
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    st.markdown(f"**Address:** {hospital['address']}")
-                    st.markdown(f"**City:** {hospital['city']}, {hospital['state']}")
-                    st.markdown(f"**Phone:** {hospital['phone']}")
+        if hospitals and 'error' not in hospitals[0]:
+            st.success(f"Found {len(hospitals)} recommended healthcare facilities")
+            
+            for i, hospital in enumerate(hospitals[:5], 1):
+                with st.expander(f"{i}. {hospital['name']} ⭐ {hospital['cardiac_rating']}/5.0"):
+                    col1, col2 = st.columns(2)
                     
-                with col2:
-                    st.markdown(f"**Cardiac Rating:** {hospital['cardiac_rating']}/5.0")
-                    st.markdown(f"**Emergency Services:** {'✅ Yes' if hospital['emergency_services'] else '❌ No'}")
-                    st.markdown(f"**Bed Capacity:** {hospital['beds_count']}")
+                    with col1:
+                        st.markdown(f"**Address:** {hospital['address']}")
+                        st.markdown(f"**City:** {hospital['city']}, {hospital['state']}")
+                        st.markdown(f"**Phone:** {hospital['phone']}")
+                        
+                    with col2:
+                        st.markdown(f"**Cardiac Rating:** {hospital['cardiac_rating']}/5.0")
+                        st.markdown(f"**Emergency Services:** {'✅ Yes' if hospital['emergency_services'] else '❌ No'}")
+                        st.markdown(f"**Bed Capacity:** {hospital['beds_count']}")
+                        
+                    st.markdown(f"**Specializations:** {hospital['specializations']}")
                     
-                st.markdown(f"**Specializations:** {hospital['specializations']}")
-                
-                if hospital['website']:
-                    st.markdown(f"**Website:** [{hospital['website']}]({hospital['website']})")
-    
-    else:
-        st.warning("No hospitals found for the specified location. Showing general recommendations:")
-        st.info("Try searching without city/state filters, or check nearby major cities.")
+                    if hospital.get('website'):
+                        st.markdown(f"**Website:** [{hospital['website']}]({hospital['website']})")
+        else:
+            st.warning("No hospitals found for the specified location. Try searching without city/state filters, or check nearby major cities.")
+    except Exception as e:
+        st.warning(f"Could not retrieve hospital information: {str(e)}")
     
     # Specialist recommendations
     st.subheader("👨‍⚕️ Specialist Recommendations")
-    specialists = rec_system.get_specialist_recommendations(risk_level, {})
-    
-    if specialists['primary']:
-        st.markdown("#### Primary Specialists")
-        for spec in specialists['primary']:
-            st.markdown(f"**{spec['type']}** - {spec['reason']} (Every {spec['frequency']})")
-    
-    if specialists['secondary']:
-        with st.expander("Additional Specialists"):
-            for spec in specialists['secondary']:
-                st.markdown(f"**{spec['type']}** - {spec['reason']} ({spec['frequency']})")
+    try:
+        specialists = rec_system.get_specialist_recommendations(risk_level, {})
+        
+        if specialists and specialists.get('primary'):
+            st.markdown("#### Primary Specialists")
+            for spec in specialists['primary']:
+                st.markdown(f"**{spec['type']}** - {spec['reason']} (Every {spec['frequency']})")
+        
+        if specialists and specialists.get('secondary'):
+            with st.expander("Additional Specialists"):
+                for spec in specialists['secondary']:
+                    st.markdown(f"**{spec['type']}** - {spec['reason']} ({spec['frequency']})")
+    except Exception as e:
+        st.warning(f"Could not retrieve specialist recommendations: {str(e)}")
 
 def display_report_tab(patient_data: Dict, prediction_proba: float, city: str, state: str):
     """Display full patient report."""
     st.subheader("📋 Comprehensive Patient Report")
     
-    # Generate full report
-    report = generate_patient_report(patient_data, prediction_proba, city, state)
+    if generate_patient_report is None:
+        st.info("Report generation module not available. Showing basic information instead.")
+        # Show basic info
+        st.write(f"**Prediction Probability:** {prediction_proba:.2%}")
+        st.write(f"**Risk Level:** {'High' if prediction_proba > 0.7 else 'Moderate' if prediction_proba > 0.3 else 'Low'}")
+        return
     
-    # Display report
-    st.markdown(report)
-    
-    # Download button
-    st.download_button(
-        label="📥 Download Report as Markdown",
-        data=report,
-        file_name=f"heart_health_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md",
-        mime="text/markdown"
-    )
+    try:
+        # Generate full report
+        report = generate_patient_report(patient_data, prediction_proba, city, state)
+        
+        # Display report
+        st.markdown(report)
+        
+        # Download button
+        st.download_button(
+            label="📥 Download Report as Markdown",
+            data=report,
+            file_name=f"heart_health_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md",
+            mime="text/markdown"
+        )
+    except Exception as e:
+        st.warning(f"Could not generate full report: {str(e)}")
+        # Show basic info
+        st.write(f"**Prediction Probability:** {prediction_proba:.2%}")
+        st.write(f"**Risk Level:** {'High' if prediction_proba > 0.7 else 'Moderate' if prediction_proba > 0.3 else 'Low'}")
 
 def create_batch_prediction_interface():
     """Create interface for batch predictions."""
@@ -733,7 +802,16 @@ def create_user_profile_interface():
     """Create user profile management interface."""
     st.header("👤 User Profile")
     
-    current_user = get_current_user()
+    if get_current_user is None:
+        st.info("User information not available. Please ensure authentication modules are properly configured.")
+        return
+    
+    try:
+        current_user = get_current_user()
+    except:
+        st.error("Could not retrieve user information.")
+        return
+    
     if not current_user:
         st.error("User information not available.")
         return
@@ -743,14 +821,14 @@ def create_user_profile_interface():
     
     with col1:
         # User avatar placeholder
-        st.markdown("""
+        st.markdown(f"""
         <div style='text-align: center; background: linear-gradient(45deg, #667eea, #764ba2); 
                     color: white; padding: 40px; border-radius: 50%; width: 150px; height: 150px; 
                     margin: 0 auto; display: flex; align-items: center; justify-content: center; 
                     font-size: 3rem; font-weight: bold;'>
-            {}
+            {current_user['full_name'][0].upper()}
         </div>
-        """.format(current_user['full_name'][0].upper()), unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
     
     with col2:
         st.markdown("### Account Information")
@@ -802,7 +880,11 @@ def create_user_profile_interface():
         st.markdown("**Active Sessions**")
         st.write("Current session is active and valid.")
         if st.button("🚪 Logout All Sessions"):
-            logout_user()
+            if logout_user is not None:
+                try:
+                    logout_user()
+                except:
+                    pass
     
     # Danger zone
     with st.expander("⚠️ Danger Zone", expanded=False):
@@ -814,26 +896,45 @@ def create_user_profile_interface():
 def main():
     """Main application function."""
     
-    # Check authentication first
-    if not check_authentication():
+    # Check authentication first (if available)
+    auth_available = check_authentication is not None
+    
+    if auth_available and not check_authentication():
         show_authentication_page()
         return
     
-    # Get current user info
-    current_user = get_current_user()
+    # Get current user info (if available)
+    current_user_info = None
+    if get_current_user is not None:
+        try:
+            current_user_info = get_current_user()
+        except:
+            current_user_info = None
     
-    # Sidebar with user info and navigation
-    st.sidebar.markdown(f"""
-    <div style='background-color: #f0f2f6; padding: 10px; border-radius: 10px; margin-bottom: 20px;'>
-        <h4>👋 Welcome, {current_user['full_name']}!</h4>
-        <p style='margin: 0; color: #666; font-size: 0.8rem;'>@{current_user['username']}</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Logout button
-    if st.sidebar.button("🚪 Logout", help="Sign out from the system"):
-        logout_user()
-        return
+    if current_user_info:
+        # Sidebar with user info and navigation
+        st.sidebar.markdown(f"""
+        <div style='background-color: #f0f2f6; padding: 10px; border-radius: 10px; margin-bottom: 20px;'>
+            <h4>👋 Welcome, {current_user_info['full_name']}!</h4>
+            <p style='margin: 0; color: #666; font-size: 0.8rem;'>@{current_user_info['username']}</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Logout button
+        if logout_user is not None:
+            if st.sidebar.button("🚪 Logout", help="Sign out from the system"):
+                try:
+                    logout_user()
+                except:
+                    pass
+                return
+    else:
+        # Simple welcome without authentication
+        st.sidebar.markdown(f"""
+        <div style='background-color: #f0f2f6; padding: 10px; border-radius: 10px; margin-bottom: 20px;'>
+            <h4>👋 Welcome to Heart Failure Prediction System!</h4>
+        </div>
+        """, unsafe_allow_html=True)
     
     st.sidebar.title("Navigation")
     page = st.sidebar.radio(
@@ -849,18 +950,30 @@ def main():
     elif page == "📈 Dashboard":
         create_dashboard()
     elif page == "👤 User Profile":
-        create_user_profile_interface()
+        if current_user_info:
+            create_user_profile_interface()
+        else:
+            st.info("User profile information not available. Please ensure authentication modules are properly configured.")
     
     # Footer
     st.markdown("---")
-    st.markdown(f"""
-    <div style='text-align: center; color: #666; font-size: 0.8rem;'>
-        ❤️ Heart Failure Prediction System | Built with Streamlit<br>
-        <strong>Logged in as:</strong> {current_user['full_name']} ({current_user['role'].title()})<br>
-        <strong>Disclaimer:</strong> This tool is for educational purposes only. 
-        Always consult healthcare professionals for medical decisions.
-    </div>
-    """, unsafe_allow_html=True)
+    if current_user_info:
+        st.markdown(f"""
+        <div style='text-align: center; color: #666; font-size: 0.8rem;'>
+            ❤️ Heart Failure Prediction System | Built with Streamlit<br>
+            <strong>Logged in as:</strong> {current_user_info['full_name']} ({current_user_info['role'].title()})<br>
+            <strong>Disclaimer:</strong> This tool is for educational purposes only. 
+            Always consult healthcare professionals for medical decisions.
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        st.markdown(f"""
+        <div style='text-align: center; color: #666; font-size: 0.8rem;'>
+            ❤️ Heart Failure Prediction System | Built with Streamlit<br>
+            <strong>Disclaimer:</strong> This tool is for educational purposes only. 
+            Always consult healthcare professionals for medical decisions.
+        </div>
+        """, unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()

@@ -7,8 +7,21 @@ font = "sans serif"
 
 [client]
 showErrorDetails = true
-toolbarMode = "auto"
+toolbarMode = "minimal"
 
 [server]
 maxUploadSize = 200
 enableXsrfProtection = true
+headless = true
+port = 8501
+enableCORS = false
+enableWebsocketCompression = true
+
+[logger]
+level = "info"
+
+[runner]
+magicEnabled = true
+
+[deprecation]
+showPyplotGlobalUse = false
